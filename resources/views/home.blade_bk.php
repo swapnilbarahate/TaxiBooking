@@ -64,24 +64,15 @@
     </div>
 </div>
 
-@push('styles')
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
-@endpush
-
 @push('scripts')
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>
-
     function initAutocomplete() {
         const pickupInput = document.getElementById('pickup_location');
         const dropInput = document.getElementById('drop_location');
         
         if (!window.google || !window.google.maps || !window.google.maps.places) {
-            Swal.fire({
-                icon: 'error',
-                title: 'Location Service Error',
-                text: 'Google Maps API failed to load. Please refresh the page.',
-            });
+            console.error('Google Maps API failed to load');
+            alert('Location services are currently unavailable. Please try again later.');
             return;
         }
         
@@ -97,37 +88,25 @@
             fields: ['formatted_address', 'geometry']
         });
 
-        // Add place_changed listener instead of change
         pickupAutocomplete.addListener('place_changed', function() {
             const place = pickupAutocomplete.getPlace();
             if (!place.geometry) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Invalid Location',
-                    text: 'Please select a valid location from the suggestions',
-                }).then(() => {
-                    pickupInput.value = '';
-                    pickupInput.focus();
-                });
+                pickupInput.value = '';
+                alert('Please select a valid location from the suggestions');
             }
         });
 
         dropAutocomplete.addListener('place_changed', function() {
             const place = dropAutocomplete.getPlace();
             if (!place.geometry) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Invalid Location',
-                    text: 'Please select a valid location from the suggestions',
-                }).then(() => {
-                    dropInput.value = '';
-                    dropInput.focus();
-                });
+                dropInput.value = '';
+                alert('Please select a valid location from the suggestions');
             }
         });
     }
 
     $(document).ready(function() {
+        // Initialize autocomplete when page loads
         initAutocomplete();
         
         $('#calculate-fare').click(function() {
@@ -136,11 +115,7 @@
             const packageId = $('#package_id').val();
 
             if (!pickup || !drop || !packageId) {
-                Swal.fire({
-                    icon: 'warning',
-                    title: 'Missing Information',
-                    text: 'Please fill all fields before calculating fare',
-                });
+                alert('Please fill all fields');
                 return;
             }
 
@@ -172,25 +147,18 @@
                         
                         $('#fare-breakdown').removeClass('d-none');
                         
+                        // Scroll to fare breakdown
                         $('html, body').animate({
                             scrollTop: $('#fare-breakdown').offset().top - 100
                         }, 500);
                     } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Calculation Error',
-                            text: response.error || 'Failed to calculate fare',
-                        });
+                        alert('Error: ' + (response.error || 'Failed to calculate fare'));
                     }
                 },
                 error: function(xhr) {
                     $btn.html('Calculate Fare');
                     $btn.prop('disabled', false);
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Server Error',
-                        text: 'Error calculating fare. Please try again.',
-                    });
+                    alert('Error calculating fare. Please try again.');
                     console.error(xhr.responseText);
                 }
             });
@@ -231,25 +199,10 @@
                     $btn.prop('disabled', false);
                     
                     if (response.success) {
-                        Swal.fire({
-                            icon: 'success',
-                            title: 'Booking Confirmed!',
-                            html: `Your booking ID is: <strong>${response.booking_id}</strong><br>
-                                   Driver will contact you shortly.`,
-                            confirmButtonText: 'View Booking',
-                            showCancelButton: true,
-                            cancelButtonText: 'Close'
-                        }).then((result) => {
-                            if (result.isConfirmed) {
-                                window.location.href = '/my-bookings';
-                            }
-                        });
+                        alert('Booking confirmed!\nBooking ID: ' + response.booking_id);
+                        window.location.href = '/my-bookings';
                     } else {
-                        Swal.fire({
-                            icon: 'error',
-                            title: 'Booking Failed',
-                            text: response.message || 'Failed to confirm booking',
-                        });
+                        alert('Error: ' + response.message);
                     }
                 },
                 error: function(xhr) {
@@ -261,11 +214,7 @@
                         errorMsg = xhr.responseJSON.message;
                     }
                     
-                    Swal.fire({
-                        icon: 'error',
-                        title: 'Booking Error',
-                        text: errorMsg,
-                    });
+                    alert(errorMsg);
                     console.error(xhr.responseText);
                 }
             });
