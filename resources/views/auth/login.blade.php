@@ -38,16 +38,6 @@
                         @enderror
                     </div>
 
-                    <div class="mb-3">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="remember" id="remember" {{ old('remember') ? 'checked' : '' }}>
-
-                            <label class="form-check-label" for="remember">
-                                {{ __('Remember Me') }}
-                            </label>
-                        </div>
-                    </div>
-
                     <div class="d-grid gap-2">
                         <button type="submit" class="btn btn-primary py-2">
                             {{ __('Login') }}
