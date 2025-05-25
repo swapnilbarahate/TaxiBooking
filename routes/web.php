@@ -20,4 +20,5 @@ Route::middleware('auth')->group(function () {
     Route::post('/calculate-fare', [BookingController::class, 'calculateFare']);
     Route::post('/book-taxi', [BookingController::class, 'store']);
     Route::get('/my-bookings', [BookingController::class, 'index'])->name('bookings.index');
+    Route::post('/suggest-packages', [BookingController::class, 'suggestPackages']);
 });

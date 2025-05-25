@@ -129,4 +129,58 @@ class BookingController extends Controller
         $bookings = Booking::where('user_id', Auth::id())->with('package')->latest()->get();
         return view('bookings.index', compact('bookings'));
     }
+
+
+    public function suggestPackages(Request $request)
+    {
+        $request->validate([
+            'pickup' => 'required',
+            'drop' => 'required'
+        ]);
+
+        $response = $this->getDistanceMatrix($request->pickup, $request->drop);
+        
+        if (!$response['success']) {
+            return response()->json(['error' => $response['message']], 400);
+        }
+
+        $distanceKm = $response['distance'] / 1000;
+        $durationHours = $response['duration'] / 3600;
+
+        // Determine package type based on distance (50km threshold)
+        $packageType = $distanceKm <= 50 ? 'local' : 'outstation';
+        $limit = 3; // Set the number of packages to return
+
+        // Get matching packages with intelligent sorting
+        $suggestedPackages = TaxiPackage::where('type', $packageType)
+            ->active()
+            ->get()
+            ->map(function($package) use ($distanceKm, $durationHours) {
+                // Calculate how well this package matches the trip
+                $distanceCoverage = min(1, $package->base_distance / max(1, $distanceKm));
+                $durationCoverage = min(1, $package->base_hours / max(1, $durationHours));
+                $package->match_score = ($distanceCoverage * 0.7) + ($durationCoverage * 0.3);
+                $package->is_perfect_match = ($package->base_distance >= $distanceKm) && 
+                                        ($package->base_hours >= $durationHours);
+                return $package;
+            })
+            ->sortByDesc(function($package) {
+                // Sort perfect matches first, then by match score
+                return [$package->is_perfect_match ? 1 : 0, $package->match_score];
+            })
+            ->take($limit);
+
+        // If no packages found for the determined type, fall back to on-demand
+        if ($suggestedPackages->isEmpty()) {
+            $suggestedPackages = collect([TaxiPackage::where('base_distance', 0)->first()]);
+        }
+
+        return response()->json([
+            'success' => true,
+            'distance' => round($distanceKm, 2),
+            'duration' => round($durationHours, 2),
+            'package_type' => $packageType,
+            'packages' => $suggestedPackages->values()
+        ]);
+    }
 }

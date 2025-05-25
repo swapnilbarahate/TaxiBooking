@@ -24,7 +24,7 @@
                         <div class="form-text">Start typing to see suggestions</div>
                     </div>
 
-                    <div class="mb-3">
+                    <!-- <div class="mb-3">
                         <label for="package_id" class="form-label">Select Package</label>
                         <select class="form-select" id="package_id" name="package_id" required>
                             <option value="">-- Select Package --</option>
@@ -32,6 +32,25 @@
                             <option value="{{ $package->id }}">{{ $package->name }} (₹{{ $package->base_price }})</option>
                             @endforeach
                         </select>
+                    </div> -->
+
+                    <div class="mb-3">
+                        <label for="package_id" class="form-label">Select Package</label>
+                        <select class="form-select" id="package_id" name="package_id" required>
+                            <option value="">-- Select Package --</option>
+                            @foreach($packages as $package)
+                            <option value="{{ $package->id }}" 
+                                    data-distance="{{ $package->base_distance }}"
+                                    data-hours="{{ $package->base_hours }}"
+                                    data-price="{{ $package->base_price }}"
+                                    data-extra-km="{{ $package->extra_km_rate }}"
+                                    data-extra-hour="{{ $package->extra_hour_rate }}" 
+                                    title="Includes {{ $package->base_distance }} km, Extra: ₹{{ $package->extra_hour_rate }}/hrs, ₹{{ $package->extra_km_rate }}/km">
+                                    {{ $package->name }}: ₹{{ $package->base_price }}
+                            </option>
+                            @endforeach
+                        </select>
+                        <div id="package-suggestions" class="mt-2"></div>
                     </div>
 
                     <button type="button" id="calculate-fare" class="btn btn-primary w-100 py-2">
@@ -95,7 +114,7 @@
             fields: ['formatted_address', 'geometry']
         });
 
-        // Add place_changed listener instead of change
+        // Add place_changed listener to trigger package suggestions
         pickupAutocomplete.addListener('place_changed', function() {
             const place = pickupAutocomplete.getPlace();
             if (!place.geometry) {
@@ -107,6 +126,9 @@
                     pickupInput.value = '';
                     pickupInput.focus();
                 });
+            } else {
+                // Manually trigger the change event after selection
+                $(pickupInput).trigger('change');
             }
         });
 
@@ -121,12 +143,94 @@
                     dropInput.value = '';
                     dropInput.focus();
                 });
-            }
-        });
+            } else {
+                // Manually trigger the change event after selection
+                        $(dropInput).trigger('change');
+                    }
+                });
     }
 
     $(document).ready(function() {
         initAutocomplete();
+
+        $('#pickup_location, #drop_location').on('change', function() {
+            const pickup = $('#pickup_location').val();
+            const drop = $('#drop_location').val();
+            
+            if (pickup && drop) {
+                // Show loading indicator
+                $('#package-suggestions').html('<div class="text-center my-2"><div class="spinner-border text-primary" role="status"></div></div>');
+                
+                setTimeout(function() {
+                    $.ajax({
+                        url: '/suggest-packages',
+                        method: 'POST',
+                        data: {
+                            pickup: $('#pickup_location').val(), 
+                            drop: $('#drop_location').val(),    
+                            _token: $('meta[name="csrf-token"]').attr('content')
+                        },
+                        success: function(response) {
+                            if (response.success) {
+                                let suggestionsHtml = `
+                                    <div class="alert alert-info p-2 mb-2">
+                                        <strong>Route Distance:</strong> ${response.distance} km<br>
+                                        <strong>Estimated Duration:</strong> ${response.duration} hrs
+                                    </div>`;
+                                
+                                if (response.packages.length > 0) {
+                                    suggestionsHtml += `
+                                    <div class="alert alert-success p-2">
+                                        <strong class="mb-2 d-block">Recommended Packages:</strong>`;
+                                    
+                                    response.packages.forEach(pkg => {
+                                        // Calculate if this package covers the distance/duration
+                                        const coversDistance = pkg.base_distance >= response.distance;
+                                        const coversDuration = pkg.base_hours >= response.duration;
+                                        
+                                        suggestionsHtml += `
+                                        <div class="form-check mb-2">
+                                            <input class="form-check-input" type="radio" 
+                                                name="suggested_package" 
+                                                id="suggested-${pkg.id}" 
+                                                value="${pkg.id}"
+                                                onclick="$('#package_id').val('${pkg.id}')">
+                                            <label class="form-check-label" for="suggested-${pkg.id}">
+                                                <strong>${pkg.name}</strong><br>
+                                                <small>
+                                                    ${pkg.base_distance} km / ${pkg.base_hours} hrs included<br>
+                                                    Base Price: ₹${pkg.base_price}<br>
+                                                    Extra: ₹${pkg.extra_km_rate}/km, ₹${pkg.extra_hour_rate}/hr
+                                                </small>
+                                                ${coversDistance && coversDuration ? 
+                                                    '<span class="badge bg-success ms-2">Perfect Match</span>' : 
+                                                    '<span class="badge bg-warning text-dark ms-2">Partial Match</span>'}
+                                            </label>
+                                        </div>`;
+                                    });
+                                    
+                                    suggestionsHtml += `</div>`;
+                                } else {
+                                    suggestionsHtml += `
+                                    <div class="alert alert-warning p-2">
+                                        No package fully covers this route. The On-Demand package will be used.
+                                    </div>`;
+                                }
+                                
+                                $('#package-suggestions').html(suggestionsHtml);
+                            }
+                        },
+                        error: function(xhr) {
+                            $('#package-suggestions').html(`
+                                <div class="alert alert-danger p-2">
+                                    Could not suggest packages. Please select one manually.
+                                </div>`);
+                            console.error(xhr.responseText);
+                        }
+                    });
+                }, 300); 
+            }
+        });
         
         $('#calculate-fare').click(function() {
             const pickup = $('#pickup_location').val();
